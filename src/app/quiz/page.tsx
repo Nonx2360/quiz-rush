@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuizEngine } from "@/hooks/useQuizEngine";
 import { useTimer } from "@/hooks/useTimer";
 import { Question } from "@/lib/types";
@@ -43,6 +43,8 @@ export default function QuizPage() {
     avgTime,
   } = useQuizEngine(questions);
 
+  const timerRef = useRef<{ start: (d?: number) => void; stop: () => void; reset: (d?: number) => void } | null>(null);
+
   const onTimeout = useCallback(() => {
     if (gameState === "playing" && !selectedAnswer) {
       handleAnswer("");
@@ -51,24 +53,25 @@ export default function QuizPage() {
   }, [gameState, selectedAnswer, handleAnswer, nextQuestion]);
 
   const timer = useTimer(TIME_PER_QUESTION, onTimeout);
+  timerRef.current = timer;
 
   useEffect(() => {
     if (gameState === "playing" && selectedAnswer) {
-      timer.stop();
+      timerRef.current?.stop();
       const timeout = setTimeout(() => {
         nextQuestion();
-        timer.reset(TIME_PER_QUESTION);
-        timer.start(TIME_PER_QUESTION);
+        timerRef.current?.reset(TIME_PER_QUESTION);
+        timerRef.current?.start(TIME_PER_QUESTION);
       }, 800);
       return () => clearTimeout(timeout);
     }
-  }, [gameState, selectedAnswer, nextQuestion, timer]);
+  }, [gameState, selectedAnswer, nextQuestion]);
 
   useEffect(() => {
     if (gameState === "playing" && !selectedAnswer && currentIndex > 0) {
-      timer.start(TIME_PER_QUESTION);
+      timerRef.current?.start(TIME_PER_QUESTION);
     }
-  }, [gameState, currentIndex, selectedAnswer, timer]);
+  }, [gameState, currentIndex, selectedAnswer]);
 
   const handleStartGame = () => {
     startGame();
