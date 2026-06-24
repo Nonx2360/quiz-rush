@@ -9,9 +9,13 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@upstash/redis": "^1.38.0",
+    "framer-motion": "^12.41.0",
+    "nanoid": "^5.1.15",
     "next": "16.2.9",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
