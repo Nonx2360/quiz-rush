@@ -124,6 +124,12 @@ body {
   cursor: default;
 }
 
+.option-btn.hint-eliminated {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
 .option-btn.correct {
   border-color: var(--color-emerald);
   background: rgba(52, 184, 122, 0.08);

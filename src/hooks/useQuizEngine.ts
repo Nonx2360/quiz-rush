@@ -5,11 +5,18 @@ import { Question } from "@/lib/types";
 import { pickRandomQuestions } from "@/lib/shuffle";
 import { prepareQuestion, PreparedQuestion } from "@/lib/prepareQuestion";
 import { calculateScore } from "@/lib/scoring";
+import { EventType, rollRandomEvent } from "@/lib/events";
 
 export interface Answer {
   questionId: string;
   correct: boolean;
   timeTaken: number;
+}
+
+interface ActiveEffects {
+  doublePoints: boolean;
+  comboShield: boolean;
+  hintOption: number | null;
 }
 
 interface QuizState {
@@ -21,6 +28,8 @@ interface QuizState {
   questions: PreparedQuestion[];
   answers: Answer[];
   selectedAnswer: string | null;
+  currentEvent: EventType | null;
+  activeEffects: ActiveEffects;
 }
 
 interface UseQuizEngineReturn extends QuizState {
@@ -31,6 +40,7 @@ interface UseQuizEngineReturn extends QuizState {
   totalQuestions: number;
   accuracy: number;
   avgTime: number;
+  consumeEvent: () => void;
 }
 
 const TOTAL_QUESTIONS = 15;
@@ -48,6 +58,12 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
     questions: [],
     answers: [],
     selectedAnswer: null,
+    currentEvent: null,
+    activeEffects: {
+      doublePoints: false,
+      comboShield: false,
+      hintOption: null,
+    },
   });
 
   const startGame = useCallback(() => {
@@ -62,8 +78,18 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
       questions: prepared,
       answers: [],
       selectedAnswer: null,
+      currentEvent: null,
+      activeEffects: {
+        doublePoints: false,
+        comboShield: false,
+        hintOption: null,
+      },
     });
   }, [pool]);
+
+  const consumeEvent = useCallback(() => {
+    setState((prev) => ({ ...prev, currentEvent: null }));
+  }, []);
 
   const handleAnswer = useCallback(
     (selectedOption: string) => {
@@ -74,14 +100,39 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
         const isCorrect = selectedOption === currentQ.correctAnswer;
         const newCombo = isCorrect ? prev.combo + 1 : 0;
         const newMaxCombo = Math.max(prev.maxCombo, newCombo);
-        const scoreGained = isCorrect
-          ? calculateScore({
-              baseScore: BASE_SCORE,
-              timeLeft: TIME_PER_QUESTION,
-              speedMultiplier: SPEED_MULTIPLIER,
-              comboCount: prev.combo,
-            })
-          : 0;
+
+        let scoreGained = 0;
+        if (isCorrect) {
+          scoreGained = calculateScore({
+            baseScore: BASE_SCORE,
+            timeLeft: TIME_PER_QUESTION,
+            speedMultiplier: SPEED_MULTIPLIER,
+            comboCount: prev.combo,
+          });
+          if (prev.activeEffects.doublePoints) {
+            scoreGained *= 2;
+          }
+        } else if (prev.activeEffects.comboShield) {
+          // Combo shield: wrong answer doesn't break combo
+          const shieldedCombo = prev.combo;
+          scoreGained = 0;
+          const newAnswer: Answer = {
+            questionId: currentQ.id,
+            correct: false,
+            timeTaken: TIME_PER_QUESTION,
+          };
+          return {
+            ...prev,
+            combo: shieldedCombo,
+            maxCombo: Math.max(prev.maxCombo, shieldedCombo),
+            answers: [...prev.answers, newAnswer],
+            selectedAnswer: selectedOption,
+            activeEffects: {
+              ...prev.activeEffects,
+              comboShield: false,
+            },
+          };
+        }
 
         const newAnswer: Answer = {
           questionId: currentQ.id,
@@ -96,6 +147,11 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
           maxCombo: newMaxCombo,
           answers: [...prev.answers, newAnswer],
           selectedAnswer: selectedOption,
+          activeEffects: {
+            doublePoints: false,
+            comboShield: false,
+            hintOption: null,
+          },
         };
       });
     },
@@ -108,10 +164,32 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
       if (nextIndex >= TOTAL_QUESTIONS) {
         return { ...prev, gameState: "finished" };
       }
+
+      const eventType = rollRandomEvent();
+      const newEffects = { ...prev.activeEffects };
+
+      if (eventType === "DOUBLE_POINTS") {
+        newEffects.doublePoints = true;
+      } else if (eventType === "COMBO_SHIELD") {
+        newEffects.comboShield = true;
+      } else if (eventType === "HINT") {
+        const nextQ = prev.questions[nextIndex];
+        const correctIdx = nextQ.options.indexOf(nextQ.correctAnswer);
+        const wrongIndices = nextQ.options
+          .map((_, i) => i)
+          .filter((i) => i !== correctIdx);
+        if (wrongIndices.length > 0) {
+          const randomWrongIdx = wrongIndices[Math.floor(Math.random() * wrongIndices.length)];
+          newEffects.hintOption = randomWrongIdx;
+        }
+      }
+
       return {
         ...prev,
         currentIndex: nextIndex,
         selectedAnswer: null,
+        currentEvent: eventType,
+        activeEffects: newEffects,
       };
     });
   }, []);
@@ -132,5 +210,6 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
     totalQuestions: TOTAL_QUESTIONS,
     accuracy: state.answers.length > 0 ? (correctCount / state.answers.length) * 100 : 0,
     avgTime: state.answers.length > 0 ? totalTime / state.answers.length : 0,
+    consumeEvent,
   };
 }

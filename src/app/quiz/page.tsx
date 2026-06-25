@@ -10,6 +10,8 @@ import ComboIndicator from "@/components/ComboIndicator";
 import ScoreDisplay from "@/components/ScoreDisplay";
 import ResultSummary from "@/components/ResultSummary";
 import NameInputModal from "@/components/NameInputModal";
+import RandomEventPopup from "@/components/RandomEventPopup";
+import EventIndicator from "@/components/EventIndicator";
 import Link from "next/link";
 import questionsData from "@/data/questions.json";
 
@@ -34,6 +36,8 @@ export default function QuizPage() {
     questions: quizQuestions,
     answers,
     selectedAnswer,
+    currentEvent,
+    activeEffects,
     startGame,
     handleAnswer,
     nextQuestion,
@@ -41,9 +45,10 @@ export default function QuizPage() {
     totalQuestions,
     accuracy,
     avgTime,
+    consumeEvent,
   } = useQuizEngine(questions);
 
-  const timerRef = useRef<{ start: (d?: number) => void; stop: () => void; reset: (d?: number) => void } | null>(null);
+  const timerRef = useRef<{ start: (d?: number) => void; stop: () => void; reset: (d?: number) => void; freeze: (s: number) => void; addTime: (s: number) => void } | null>(null);
 
   const onTimeout = useCallback(() => {
     if (gameState === "playing" && !selectedAnswer) {
@@ -54,6 +59,22 @@ export default function QuizPage() {
 
   const timer = useTimer(TIME_PER_QUESTION, onTimeout);
   timerRef.current = timer;
+
+  useEffect(() => {
+    if (gameState === "playing" && currentEvent) {
+      if (currentEvent === "BONUS_TIME") {
+        timerRef.current?.addTime(5);
+      } else if (currentEvent === "FREEZE_TIMER") {
+        timerRef.current?.freeze(5);
+      } else if (currentEvent === "SKIP") {
+        setTimeout(() => {
+          nextQuestion();
+          timerRef.current?.reset(TIME_PER_QUESTION);
+          timerRef.current?.start(TIME_PER_QUESTION);
+        }, 1500);
+      }
+    }
+  }, [gameState, currentEvent, nextQuestion]);
 
   useEffect(() => {
     if (gameState === "playing" && selectedAnswer) {
@@ -144,6 +165,8 @@ export default function QuizPage() {
         {/* ─── Playing State ─── */}
         {gameState === "playing" && quizQuestions[currentIndex] && (
           <div className="max-w-2xl mx-auto">
+            <RandomEventPopup event={currentEvent} onDismiss={consumeEvent} />
+            <EventIndicator activeEffects={activeEffects} />
             <ScoreDisplay score={score} combo={combo} />
             <Timer timeLeft={timer.timeLeft} duration={TIME_PER_QUESTION} />
             <QuizCard
@@ -155,6 +178,7 @@ export default function QuizPage() {
                 timer.stop();
               }}
               selectedAnswer={selectedAnswer}
+              hintOption={activeEffects.hintOption}
             />
           </div>
         )}

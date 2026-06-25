@@ -8,6 +8,7 @@ interface QuizCardProps {
   totalQuestions: number;
   onAnswer: (option: string) => void;
   selectedAnswer: string | null;
+  hintOption: number | null;
 }
 
 const optionAccents = [
@@ -23,6 +24,7 @@ export default function QuizCard({
   totalQuestions,
   onAnswer,
   selectedAnswer,
+  hintOption,
 }: QuizCardProps) {
   return (
     <div className="w-full">
@@ -68,6 +70,7 @@ export default function QuizCard({
             const isSelected = selectedAnswer === option;
             const isCorrect = option === question.correctAnswer;
             const showResult = selectedAnswer !== null;
+            const isHinted = hintOption === index;
 
             let className = "option-btn";
 
@@ -79,13 +82,15 @@ export default function QuizCard({
               } else {
                 className += " opacity-30";
               }
+            } else if (isHinted) {
+              className += " hint-eliminated";
             }
 
             return (
               <button
                 key={index}
-                onClick={() => !selectedAnswer && onAnswer(option)}
-                disabled={selectedAnswer !== null}
+                onClick={() => !selectedAnswer && !isHinted && onAnswer(option)}
+                disabled={selectedAnswer !== null || isHinted}
                 className={className}
               >
                 <span
@@ -96,25 +101,33 @@ export default function QuizCard({
                         ? "var(--color-emerald)"
                         : showResult && isSelected && !isCorrect
                         ? "var(--color-rose)"
+                        : isHinted
+                        ? "var(--color-surface-border)"
                         : accent.bg,
                     color:
                       showResult && isCorrect
                         ? "#fff"
                         : showResult && isSelected && !isCorrect
                         ? "#fff"
+                        : isHinted
+                        ? "var(--color-text-dim)"
                         : accent.color,
                     border: `1px solid ${
                       showResult && isCorrect
                         ? "var(--color-emerald)"
                         : showResult && isSelected && !isCorrect
                         ? "var(--color-rose)"
+                        : isHinted
+                        ? "var(--color-surface-border)"
                         : "transparent"
                     }`,
                   }}
                 >
                   {accent.letter}
                 </span>
-                <span className="font-medium text-[15px]">{option}</span>
+                <span className={`font-medium text-[15px] ${isHinted ? "line-through opacity-40" : ""}`}>
+                  {option}
+                </span>
               </button>
             );
           })}
