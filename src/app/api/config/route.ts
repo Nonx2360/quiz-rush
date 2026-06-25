@@ -23,7 +23,7 @@ export async function PUT(req: Request) {
   try {
     const body = await req.json();
     const config: GameConfig = {
-      totalQuestions: Math.max(1, Math.min(50, body.totalQuestions || 15)),
+      totalQuestions: Math.max(1, Math.min(50, body.totalQuestions || 20)),
       timePerQuestion: Math.max(5, Math.min(60, body.timePerQuestion || 15)),
       eventDropRate: Math.max(0, Math.min(1, body.eventDropRate || 0.3)),
       events: body.events || DEFAULT_GAME_CONFIG.events,

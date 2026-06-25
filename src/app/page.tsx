@@ -94,7 +94,7 @@ export default function Home() {
             {/* Stats Row */}
             <div className="grid grid-cols-3 divide-x divide-[var(--color-surface-border)]">
               {[
-                { value: "15", unit: "ข้อ / รอบ" },
+                { value: "20", unit: "ข้อ / รอบ" },
                 { value: "15", unit: "วินาที / ข้อ" },
                 { value: "2x", unit: "Combo สูงสุด" },
               ].map((stat, i) => (

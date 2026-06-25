@@ -121,7 +121,7 @@ export const DEFAULT_EVENTS: EventConfig[] = [
 ];
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
-  totalQuestions: 15,
+  totalQuestions: 20,
   timePerQuestion: 15,
   eventDropRate: 0.3,
   events: DEFAULT_EVENTS,
