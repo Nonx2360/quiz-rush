@@ -13,4 +13,9 @@ export interface LeaderboardEntry {
   accuracy: number;
   avgTime: number;
   playedAt: number;
+  contact?: {
+    line?: string;
+    instagram?: string;
+    phone?: string;
+  };
 }

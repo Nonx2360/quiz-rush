@@ -36,11 +36,23 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+
+    // Increment daily play count
+    const now = new Date();
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const bangkok = new Date(utc + 7 * 3600000);
+    const year = bangkok.getFullYear();
+    const month = String(bangkok.getMonth() + 1).padStart(2, "0");
+    const day = String(bangkok.getDate()).padStart(2, "0");
+    const todayKey = `plays:${year}-${month}-${day}`;
+    await redis.incr(todayKey);
+
     const member = JSON.stringify({
       username: body.username,
       accuracy: body.accuracy,
       avgTime: body.avgTime,
       playedAt: Date.now(),
+      contact: body.contact || null,
     });
 
     await redis.zadd("leaderboard:score", {

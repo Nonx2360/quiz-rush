@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuizEngine } from "@/hooks/useQuizEngine";
 import { useTimer } from "@/hooks/useTimer";
 import { Question } from "@/lib/types";
+import { GameConfig, DEFAULT_GAME_CONFIG } from "@/lib/config";
 import QuizCard from "@/components/QuizCard";
 import Timer from "@/components/Timer";
 import ComboIndicator from "@/components/ComboIndicator";
@@ -15,16 +16,19 @@ import EventIndicator from "@/components/EventIndicator";
 import Link from "next/link";
 import questionsData from "@/data/questions.json";
 
-const TIME_PER_QUESTION = 15;
-
 export default function QuizPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [config, setConfig] = useState<GameConfig>(DEFAULT_GAME_CONFIG);
   const [showModal, setShowModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     setQuestions(questionsData as Question[]);
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((data) => setConfig(data))
+      .catch(() => {});
   }, []);
 
   const {
@@ -46,7 +50,7 @@ export default function QuizPage() {
     accuracy,
     avgTime,
     consumeEvent,
-  } = useQuizEngine(questions);
+  } = useQuizEngine(questions, config);
 
   const timerRef = useRef<{ start: (d?: number) => void; stop: () => void; reset: (d?: number) => void; freeze: (s: number) => void; addTime: (s: number) => void } | null>(null);
 
@@ -57,56 +61,56 @@ export default function QuizPage() {
     }
   }, [gameState, selectedAnswer, handleAnswer, nextQuestion]);
 
-  const timer = useTimer(TIME_PER_QUESTION, onTimeout);
+  const timer = useTimer(config.timePerQuestion, onTimeout);
   timerRef.current = timer;
 
   useEffect(() => {
     if (gameState === "playing" && currentEvent) {
-      if (currentEvent === "BONUS_TIME") {
-        timerRef.current?.addTime(5);
-      } else if (currentEvent === "FREEZE_TIMER") {
-        timerRef.current?.freeze(5);
-      } else if (currentEvent === "SKIP") {
+      if (currentEvent.effect === "bonus_time") {
+        timerRef.current?.addTime(currentEvent.effectParams.seconds ?? 5);
+      } else if (currentEvent.effect === "freeze_timer") {
+        timerRef.current?.freeze(currentEvent.effectParams.seconds ?? 5);
+      } else if (currentEvent.effect === "skip") {
         setTimeout(() => {
           nextQuestion();
-          timerRef.current?.reset(TIME_PER_QUESTION);
-          timerRef.current?.start(TIME_PER_QUESTION);
+          timerRef.current?.reset(config.timePerQuestion);
+          timerRef.current?.start(config.timePerQuestion);
         }, 1500);
       }
     }
-  }, [gameState, currentEvent, nextQuestion]);
+  }, [gameState, currentEvent, nextQuestion, config.timePerQuestion]);
 
   useEffect(() => {
     if (gameState === "playing" && selectedAnswer) {
       timerRef.current?.stop();
       const timeout = setTimeout(() => {
         nextQuestion();
-        timerRef.current?.reset(TIME_PER_QUESTION);
-        timerRef.current?.start(TIME_PER_QUESTION);
+        timerRef.current?.reset(config.timePerQuestion);
+        timerRef.current?.start(config.timePerQuestion);
       }, 800);
       return () => clearTimeout(timeout);
     }
-  }, [gameState, selectedAnswer, nextQuestion]);
+  }, [gameState, selectedAnswer, nextQuestion, config.timePerQuestion]);
 
   useEffect(() => {
     if (gameState === "playing" && !selectedAnswer && currentIndex > 0) {
-      timerRef.current?.start(TIME_PER_QUESTION);
+      timerRef.current?.start(config.timePerQuestion);
     }
-  }, [gameState, currentIndex, selectedAnswer]);
+  }, [gameState, currentIndex, selectedAnswer, config.timePerQuestion]);
 
   const handleStartGame = () => {
     startGame();
-    timer.reset(TIME_PER_QUESTION);
-    setTimeout(() => timer.start(TIME_PER_QUESTION), 100);
+    timer.reset(config.timePerQuestion);
+    setTimeout(() => timer.start(config.timePerQuestion), 100);
   };
 
-  const handleSubmitScore = async (username: string) => {
+  const handleSubmitScore = async (username: string, contact?: { line?: string; instagram?: string; phone?: string }) => {
     setIsSubmitting(true);
     try {
       await fetch("/api/leaderboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, score, accuracy, avgTime }),
+        body: JSON.stringify({ username, score, accuracy, avgTime, contact }),
       });
       setSubmitted(true);
       setShowModal(false);
@@ -143,7 +147,7 @@ export default function QuizPage() {
             </div>
             <h1 className="text-5xl font-black mb-4">สุนทรภู่</h1>
             <p className="text-sm text-[var(--color-text-dim)] mb-8">
-              {totalQuestions} ข้อ ภายในเวลา {TIME_PER_QUESTION} วินาทีต่อข้อ
+              {totalQuestions} ข้อ ภายในเวลา {config.timePerQuestion} วินาทีต่อข้อ
             </p>
             <button onClick={handleStartGame} className="btn-primary text-lg px-12 mb-6">
               <span className="flex items-center justify-center gap-2">
@@ -165,10 +169,10 @@ export default function QuizPage() {
         {/* ─── Playing State ─── */}
         {gameState === "playing" && quizQuestions[currentIndex] && (
           <div className="max-w-2xl mx-auto">
-            <RandomEventPopup event={currentEvent} onDismiss={consumeEvent} />
-            <EventIndicator activeEffects={activeEffects} />
+            <RandomEventPopup event={currentEvent?.type || null} onDismiss={consumeEvent} events={config.events} />
+            <EventIndicator activeEffects={activeEffects} events={config.events} />
             <ScoreDisplay score={score} combo={combo} />
-            <Timer timeLeft={timer.timeLeft} duration={TIME_PER_QUESTION} />
+            <Timer timeLeft={timer.timeLeft} duration={config.timePerQuestion} />
             <QuizCard
               question={quizQuestions[currentIndex]}
               questionNumber={currentIndex + 1}

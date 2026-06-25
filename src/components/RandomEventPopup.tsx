@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { EventType, EVENT_CONFIG } from "@/lib/events";
+import { EventConfig, getEventMeta } from "@/lib/config";
 
 interface RandomEventPopupProps {
-  event: EventType | null;
+  event: string | null;
   onDismiss: () => void;
+  events: EventConfig[];
 }
 
-export default function RandomEventPopup({ event, onDismiss }: RandomEventPopupProps) {
+export default function RandomEventPopup({ event, onDismiss, events }: RandomEventPopupProps) {
   const [show, setShow] = useState(false);
   const dismissTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -31,7 +32,7 @@ export default function RandomEventPopup({ event, onDismiss }: RandomEventPopupP
     };
   }, [event, onDismiss]);
 
-  const config = event ? EVENT_CONFIG[event] : null;
+  const config = event ? getEventMeta(event, events) : null;
 
   return (
     <AnimatePresence>

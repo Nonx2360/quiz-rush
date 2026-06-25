@@ -1,6 +1,6 @@
 "use client";
 
-import { EventType, EVENT_CONFIG } from "@/lib/events";
+import { EventConfig, getEventMeta } from "@/lib/config";
 
 interface EventIndicatorProps {
   activeEffects: {
@@ -8,32 +8,34 @@ interface EventIndicatorProps {
     comboShield: boolean;
     hintOption: number | null;
   };
+  events: EventConfig[];
 }
 
-export default function EventIndicator({ activeEffects }: EventIndicatorProps) {
-  const activeEvents: EventType[] = [];
-  if (activeEffects.doublePoints) activeEvents.push("DOUBLE_POINTS");
-  if (activeEffects.comboShield) activeEvents.push("COMBO_SHIELD");
-  if (activeEffects.hintOption !== null) activeEvents.push("HINT");
+export default function EventIndicator({ activeEffects, events }: EventIndicatorProps) {
+  const activeEventTypes: string[] = [];
+  if (activeEffects.doublePoints) activeEventTypes.push("DOUBLE_POINTS");
+  if (activeEffects.comboShield) activeEventTypes.push("COMBO_SHIELD");
+  if (activeEffects.hintOption !== null) activeEventTypes.push("HINT");
 
-  if (activeEvents.length === 0) return null;
+  if (activeEventTypes.length === 0) return null;
 
   return (
     <div className="flex items-center gap-2 mb-4">
-      {activeEvents.map((eventType) => {
-        const config = EVENT_CONFIG[eventType];
+      {activeEventTypes.map((eventType) => {
+        const meta = getEventMeta(eventType, events);
+        if (!meta) return null;
         return (
           <div
             key={eventType}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold"
             style={{
-              background: `${config.color}15`,
-              color: config.color,
-              border: `1px solid ${config.color}30`,
+              background: `${meta.color}15`,
+              color: meta.color,
+              border: `1px solid ${meta.color}30`,
             }}
           >
-            <span>{config.icon}</span>
-            <span>{config.label}</span>
+            <span>{meta.icon}</span>
+            <span>{meta.label}</span>
           </div>
         );
       })}

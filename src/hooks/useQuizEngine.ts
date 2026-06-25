@@ -5,7 +5,8 @@ import { Question } from "@/lib/types";
 import { pickRandomQuestions } from "@/lib/shuffle";
 import { prepareQuestion, PreparedQuestion } from "@/lib/prepareQuestion";
 import { calculateScore } from "@/lib/scoring";
-import { EventType, rollRandomEvent } from "@/lib/events";
+import { RolledEvent, rollRandomEvent } from "@/lib/events";
+import { GameConfig, DEFAULT_GAME_CONFIG } from "@/lib/config";
 
 export interface Answer {
   questionId: string;
@@ -15,6 +16,7 @@ export interface Answer {
 
 interface ActiveEffects {
   doublePoints: boolean;
+  pointsMultiplier: number;
   comboShield: boolean;
   hintOption: number | null;
 }
@@ -28,7 +30,7 @@ interface QuizState {
   questions: PreparedQuestion[];
   answers: Answer[];
   selectedAnswer: string | null;
-  currentEvent: EventType | null;
+  currentEvent: RolledEvent | null;
   activeEffects: ActiveEffects;
 }
 
@@ -43,12 +45,15 @@ interface UseQuizEngineReturn extends QuizState {
   consumeEvent: () => void;
 }
 
-const TOTAL_QUESTIONS = 15;
-const TIME_PER_QUESTION = 15;
 const BASE_SCORE = 50;
 const SPEED_MULTIPLIER = 10;
 
-export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
+export function useQuizEngine(
+  pool: Question[],
+  config: GameConfig = DEFAULT_GAME_CONFIG
+): UseQuizEngineReturn {
+  const { totalQuestions, timePerQuestion, eventDropRate, events } = config;
+
   const [state, setState] = useState<QuizState>({
     currentIndex: 0,
     score: 0,
@@ -61,13 +66,14 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
     currentEvent: null,
     activeEffects: {
       doublePoints: false,
+      pointsMultiplier: 2,
       comboShield: false,
       hintOption: null,
     },
   });
 
   const startGame = useCallback(() => {
-    const selected = pickRandomQuestions(pool, TOTAL_QUESTIONS);
+    const selected = pickRandomQuestions(pool, totalQuestions);
     const prepared = selected.map(prepareQuestion);
     setState({
       currentIndex: 0,
@@ -81,11 +87,12 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
       currentEvent: null,
       activeEffects: {
         doublePoints: false,
+        pointsMultiplier: 2,
         comboShield: false,
         hintOption: null,
       },
     });
-  }, [pool]);
+  }, [pool, totalQuestions]);
 
   const consumeEvent = useCallback(() => {
     setState((prev) => ({ ...prev, currentEvent: null }));
@@ -105,21 +112,20 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
         if (isCorrect) {
           scoreGained = calculateScore({
             baseScore: BASE_SCORE,
-            timeLeft: TIME_PER_QUESTION,
+            timeLeft: timePerQuestion,
             speedMultiplier: SPEED_MULTIPLIER,
             comboCount: prev.combo,
           });
           if (prev.activeEffects.doublePoints) {
-            scoreGained *= 2;
+            scoreGained *= prev.activeEffects.pointsMultiplier;
           }
         } else if (prev.activeEffects.comboShield) {
-          // Combo shield: wrong answer doesn't break combo
           const shieldedCombo = prev.combo;
           scoreGained = 0;
           const newAnswer: Answer = {
             questionId: currentQ.id,
             correct: false,
-            timeTaken: TIME_PER_QUESTION,
+            timeTaken: timePerQuestion,
           };
           return {
             ...prev,
@@ -137,7 +143,7 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
         const newAnswer: Answer = {
           questionId: currentQ.id,
           correct: isCorrect,
-          timeTaken: TIME_PER_QUESTION,
+          timeTaken: timePerQuestion,
         };
 
         return {
@@ -149,38 +155,44 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
           selectedAnswer: selectedOption,
           activeEffects: {
             doublePoints: false,
+            pointsMultiplier: 2,
             comboShield: false,
             hintOption: null,
           },
         };
       });
     },
-    []
+    [timePerQuestion]
   );
 
   const nextQuestion = useCallback(() => {
     setState((prev) => {
       const nextIndex = prev.currentIndex + 1;
-      if (nextIndex >= TOTAL_QUESTIONS) {
+      if (nextIndex >= totalQuestions) {
         return { ...prev, gameState: "finished" };
       }
 
-      const eventType = rollRandomEvent();
+      const rolledEvent = rollRandomEvent(eventDropRate, events);
       const newEffects = { ...prev.activeEffects };
 
-      if (eventType === "DOUBLE_POINTS") {
-        newEffects.doublePoints = true;
-      } else if (eventType === "COMBO_SHIELD") {
-        newEffects.comboShield = true;
-      } else if (eventType === "HINT") {
-        const nextQ = prev.questions[nextIndex];
-        const correctIdx = nextQ.options.indexOf(nextQ.correctAnswer);
-        const wrongIndices = nextQ.options
-          .map((_, i) => i)
-          .filter((i) => i !== correctIdx);
-        if (wrongIndices.length > 0) {
-          const randomWrongIdx = wrongIndices[Math.floor(Math.random() * wrongIndices.length)];
-          newEffects.hintOption = randomWrongIdx;
+      if (rolledEvent) {
+        if (rolledEvent.effect === "double_points") {
+          newEffects.doublePoints = true;
+          newEffects.pointsMultiplier = rolledEvent.effectParams.multiplier ?? 2;
+        } else if (rolledEvent.effect === "combo_shield") {
+          newEffects.comboShield = true;
+        } else if (rolledEvent.effect === "hint") {
+          const nextQ = prev.questions[nextIndex];
+          const correctIdx = nextQ.options.indexOf(nextQ.correctAnswer);
+          const wrongIndices = nextQ.options
+            .map((_, i) => i)
+            .filter((i) => i !== correctIdx);
+          const eliminateCount = rolledEvent.effectParams.eliminateCount ?? 1;
+          if (wrongIndices.length > 0) {
+            const shuffled = [...wrongIndices].sort(() => Math.random() - 0.5);
+            const toEliminate = shuffled.slice(0, Math.min(eliminateCount, shuffled.length));
+            newEffects.hintOption = toEliminate[0];
+          }
         }
       }
 
@@ -188,11 +200,11 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
         ...prev,
         currentIndex: nextIndex,
         selectedAnswer: null,
-        currentEvent: eventType,
+        currentEvent: rolledEvent,
         activeEffects: newEffects,
       };
     });
-  }, []);
+  }, [totalQuestions, eventDropRate, events]);
 
   const endGame = useCallback(() => {
     setState((prev) => ({ ...prev, gameState: "finished" }));
@@ -207,7 +219,7 @@ export function useQuizEngine(pool: Question[]): UseQuizEngineReturn {
     handleAnswer,
     nextQuestion,
     endGame,
-    totalQuestions: TOTAL_QUESTIONS,
+    totalQuestions,
     accuracy: state.answers.length > 0 ? (correctCount / state.answers.length) * 100 : 0,
     avgTime: state.answers.length > 0 ? totalTime / state.answers.length : 0,
     consumeEvent,

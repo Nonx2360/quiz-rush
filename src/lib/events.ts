@@ -1,77 +1,34 @@
-export type EventType =
-  | "BONUS_TIME"
-  | "DOUBLE_POINTS"
-  | "COMBO_SHIELD"
-  | "HINT"
-  | "FREEZE_TIMER"
-  | "SKIP";
+import { EventConfig, EventEffect, EventEffectParams } from "./config";
 
-export interface RandomEvent {
-  type: EventType;
-  label: string;
-  description: string;
-  color: string;
-  icon: string;
+export interface RolledEvent {
+  type: string;
+  effect: EventEffect;
+  effectParams: EventEffectParams;
 }
 
-export const EVENT_CONFIG: Record<EventType, RandomEvent> = {
-  BONUS_TIME: {
-    type: "BONUS_TIME",
-    label: "เวลาเพิ่ม!",
-    description: "+5 วินาที",
-    color: "var(--color-cyan)",
-    icon: "⏰",
-  },
-  DOUBLE_POINTS: {
-    type: "DOUBLE_POINTS",
-    label: "แต้ม x2!",
-    description: "ข้อถูกต่อไปได้คะแนน 2 เท่า",
-    color: "var(--color-accent)",
-    icon: "🔥",
-  },
-  COMBO_SHIELD: {
-    type: "COMBO_SHIELD",
-    label: "โล่คอมโบ!",
-    description: "ตอบผิดไม่เสียมคอมโบ",
-    color: "var(--color-emerald)",
-    icon: "🛡️",
-  },
-  HINT: {
-    type: "HINT",
-    label: "คำใบ้!",
-    description: "ตัวเลือกผิด 1 ข้อถูกลบ",
-    color: "var(--color-violet)",
-    icon: "💡",
-  },
-  FREEZE_TIMER: {
-    type: "FREEZE_TIMER",
-    label: "หยุดเวลา!",
-    description: "เวลาหยุด 5 วินาที",
-    color: "var(--color-cyan)",
-    icon: "⏸️",
-  },
-  SKIP: {
-    type: "SKIP",
-    label: "ข้ามเลย!",
-    description: "ข้ามคำถามนี้ ไม่มีผล",
-    color: "var(--color-rose)",
-    icon: "⏭️",
-  },
-};
-
-export const EVENT_TYPES: EventType[] = [
-  "BONUS_TIME",
-  "DOUBLE_POINTS",
-  "COMBO_SHIELD",
-  "HINT",
-  "FREEZE_TIMER",
-  "SKIP",
-];
-
-export function rollRandomEvent(): EventType | null {
-  if (Math.random() < 0.3) {
-    const idx = Math.floor(Math.random() * EVENT_TYPES.length);
-    return EVENT_TYPES[idx];
+export function rollRandomEvent(
+  eventDropRate: number,
+  events: EventConfig[]
+): RolledEvent | null {
+  if (Math.random() > eventDropRate) {
+    return null;
   }
-  return null;
+
+  const enabledEvents = events.filter((e) => e.enabled);
+  if (enabledEvents.length === 0) {
+    return null;
+  }
+
+  const totalDropRate = enabledEvents.reduce((sum, e) => sum + e.dropRate, 0);
+  let random = Math.random() * totalDropRate;
+
+  for (const event of enabledEvents) {
+    random -= event.dropRate;
+    if (random <= 0) {
+      return { type: event.type, effect: event.effect, effectParams: event.effectParams };
+    }
+  }
+
+  const last = enabledEvents[enabledEvents.length - 1];
+  return { type: last.type, effect: last.effect, effectParams: last.effectParams };
 }
